@@ -1,0 +1,118 @@
+% Three-Arm Mechanism Dynamics Solver
+% This script solves the system of equations for a three-arm mechanism
+
+clear; clc;
+
+% Given parameters
+% ARM 3 (Furthestmost)
+W3 = 2.091 * 9.81;          % Weight (N)
+M3 = 5;                     % Mass (kg)
+r_com_b = 313e-3;           % COM distance (m)
+T_c = 266;                  % Torque (Nm)
+r1 = 62e-3;                 % Distance (m)
+L3 = 418e-3;                % Length (m)
+m_com_3 = 7.091;            % COM mass (kg)
+
+% ARM 2 (Middle)
+W2 = 2.0785 * 9.81;         % Weight (N)
+m_com_2 = 2.0785;           % COM mass (kg)
+r_com_A = 12.822e-3;        % COM distance (m)
+T_a = 372.4;                % Torque (Nm)
+L2 = 377e-3;                % Length (m)
+r2 = 12.822e-3;             % Distance (m)
+
+% ARM 1 (Last piece)
+W1 = 2.1045 * 9.81;         % Weight (N)
+m_com_1 = 2.1045;           % COM mass (kg)
+r_com_k = 359.467e-3;       % COM distance (m)
+T_k = 438.9;                % Torque (Nm)
+r3 = 359.467e-3;            % Distance (m)
+L1 = 420e-3;                % Length (m)
+
+% Kinematic relationships
+r_A_K = 420e-3;             % Distance A to K (m)
+r_b_A = 377e-3;             % Distance b to A (m)
+
+% Define symbolic variables
+syms F_cb F_ba F_b alpha_b alpha_A alpha_k a_A a_b
+
+% Kinematic constraints
+% a_A = alpha_k * r_A_K
+% a_b = alpha_k * r_A_K + alpha_A * r_b_A
+eq_kinematic1 = a_A - alpha_k * r_A_K;
+eq_kinematic2 = a_b - (alpha_k * r_A_K + alpha_A * r_b_A);
+
+% ARM 3 equations
+% Force equation: F_cb - W3 - M3*g = m_com_3*(a_b + alpha_b*r_com_b)
+eq_force_3 = F_cb - W3 - M3*9.81 - m_com_3*(a_b + alpha_b*r_com_b);
+
+% Moment equation: T_c - W3*r1 - M3*g*L3 = m_com_3*r_com_b^2*alpha_b
+eq_moment_3 = T_c - W3*r1 - M3*9.81*L3 - m_com_3*r_com_b^2*alpha_b;
+
+% ARM 2 equations
+% Force equation: -W2 - F_cb + F_ba = m_com_2*(a_A + alpha_A*r_com_A)
+eq_force_2 = -W2 - F_cb + F_ba - m_com_2*(a_A + alpha_A*r_com_A);
+
+% Moment equation: T_a - F_cb*L2 + W2*r2 = m_com_2*r2^2*alpha_A
+eq_moment_2 = T_a - F_cb*L2 + W2*r2 - m_com_2*r2^2*alpha_A;
+
+% ARM 1 equations
+% Force equation: F_b - W1 - F_ba = m_com_1*(alpha_k*r_com_k)
+eq_force_1 = F_b - W1 - F_ba - m_com_1*(alpha_k*r_com_k);
+
+% Moment equation: T_k - W1*r3 - F_ba*L1 = m_com_1*r3^2*alpha_k
+eq_moment_1 = T_k - W1*r3 - F_ba*L1 - m_com_1*r3^2*alpha_k;
+
+% Solve the system of equations
+equations = [eq_kinematic1, eq_kinematic2, eq_force_3, eq_moment_3, ...
+            eq_force_2, eq_moment_2, eq_force_1, eq_moment_1];
+
+variables = [F_cb, F_ba, F_b, alpha_b, alpha_A, alpha_k, a_A, a_b];
+
+fprintf('Solving the system of equations...\n');
+solution = solve(equations, variables);
+
+% Display results
+fprintf('\n=== SOLUTION RESULTS ===\n');
+fprintf('Angular accelerations:\n');
+fprintf('alpha_k (ARM 1): %.4f rad/s²\n', double(solution.alpha_k));
+fprintf('alpha_A (ARM 2): %.4f rad/s²\n', double(solution.alpha_A));
+fprintf('alpha_b (ARM 3): %.4f rad/s²\n', double(solution.alpha_b));
+
+fprintf('\nLinear accelerations:\n');
+fprintf('a_A (ARM 2): %.4f m/s²\n', double(solution.a_A));
+fprintf('a_b (ARM 3): %.4f m/s²\n', double(solution.a_b));
+
+fprintf('\nInternal forces:\n');
+fprintf('F_cb (Force from C to B): %.4f N\n', double(solution.F_cb));
+fprintf('F_ba (Force from B to A): %.4f N\n', double(solution.F_ba));
+fprintf('F_b (Force at B): %.4f N\n', double(solution.F_b));
+
+% Verification - substitute back into original equations
+fprintf('\n=== VERIFICATION ===\n');
+fprintf('Checking if solutions satisfy all equations:\n');
+
+% Substitute solutions back into equations
+eq_check = double(subs(equations, variables, ...
+    [solution.F_cb, solution.F_ba, solution.F_b, solution.alpha_b, ...
+     solution.alpha_A, solution.alpha_k, solution.a_A, solution.a_b]));
+
+tolerance = 1e-10;
+for i = 1:length(eq_check)
+    if abs(eq_check(i)) < tolerance
+        fprintf('Equation %d: ✓ SATISFIED (residual = %.2e)\n', i, eq_check(i));
+    else
+        fprintf('Equation %d: ✗ NOT SATISFIED (residual = %.2e)\n', i, eq_check(i));
+    end
+end
+
+% Display system parameters for reference
+fprintf('\n=== SYSTEM PARAMETERS ===\n');
+fprintf('ARM 3 (Furthestmost):\n');
+fprintf('  Weight: %.2f N, Mass: %.2f kg, Torque: %.2f Nm\n', W3, M3, T_c);
+fprintf('ARM 2 (Middle):\n');
+fprintf('  Weight: %.2f N, Mass: %.2f kg, Torque: %.2f Nm\n', W2, m_com_2, T_a);
+fprintf('ARM 1 (Base):\n');
+fprintf('  Weight: %.2f N, Mass: %.2f kg, Torque: %.2f Nm\n', W1, m_com_1, T_k);
+
+fprintf('\nScript completed successfully!\n');
